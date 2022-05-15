@@ -76,6 +76,7 @@ static void usage(FILE *fd)
 {
     fprintf(fd, "Usage: xwax [<options>]\n\n");
 
+
     fprintf(fd, "Program-wide options:\n"
       "  -k             Lock real-time memory into RAM\n"
       "  -q <n>         Real-time priority (0 for no priority, default %d)\n"
@@ -83,6 +84,10 @@ static void usage(FILE *fd)
       "  --no-decor     Request a window with no decorations\n"
       "  -h             Display this message to stdout and exit\n\n",
       DEFAULT_PRIORITY);
+
+    fprintf(fd, "Interface Options:\n"
+      "  --no-art	Hide BPM information\n"
+      );
 
     fprintf(fd, "Music library options:\n"
       "  -l <path>      Location to scan for audio tracks\n"
@@ -187,7 +192,7 @@ int main(int argc, char *argv[])
     int rc = -1, n, priority;
     const char *scanner, *geo;
     char *endptr;
-    bool use_mlock, decor;
+    bool use_mlock, decor, display_bpm;
 
     struct library library;
 
@@ -231,6 +236,7 @@ int main(int argc, char *argv[])
     ndeck = 0;
     geo = "";
     decor = true;
+    display_bpm = true;
     nctl = 0;
     priority = DEFAULT_PRIORITY;
     importer = DEFAULT_IMPORTER;
@@ -526,6 +532,13 @@ int main(int argc, char *argv[])
             argv += 2;
             argc -= 2;
 
+        } else if (!strcmp(argv[0], "--no-bpm")) {
+
+            display_bpm = false;
+
+            argv++;
+            argc--;
+
         } else if (!strcmp(argv[0], "--no-decor")) {
 
             decor = false;
@@ -633,7 +646,7 @@ int main(int argc, char *argv[])
         goto out_rt;
     }
 
-    if (interface_start(&library, geo, decor) == -1)
+    if (interface_start(&library, geo, decor, display_bpm) == -1)
         goto out_rt;
 
     if (rig_main() == -1)

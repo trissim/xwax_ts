@@ -175,6 +175,7 @@ static iconv_t utf;
 static pthread_t ph;
 static struct selector selector;
 static struct observer on_status, on_selector;
+static bool st_display_bpm = true;
 
 /*
  * Scale a dimension according to the current zoom level
@@ -598,7 +599,7 @@ static SDL_Color hsv(double h, double s, double v)
 
 static bool show_bpm(double bpm)
 {
-    return (bpm > 20.0 && bpm < 400.0);
+    return (bpm > 20.0 && bpm < 400.0 && st_display_bpm);
 }
 
 /*
@@ -660,9 +661,12 @@ static void draw_record(SDL_Surface *surface, const struct rect *rect,
     /* Layout changes slightly if BPM is known */
 
     if (show_bpm(record->bpm)) {
-        split(title, from_left(BPM_WIDTH, 0), &left, &right);
-        draw_bpm(surface, &left, record->bpm, background_col);
-
+	if (st_display_bpm == true){
+            split(title, from_left(BPM_WIDTH, 0), &left, &right);
+            draw_bpm(surface, &left, record->bpm, background_col);
+    	}else{
+	    right = rect;
+	}
         split(right, from_left(HALF_SPACER, 0), &left, &title);
         draw_rect(surface, &left, background_col);
     }
@@ -1853,9 +1857,10 @@ static void cleanup()
  * Start the SDL interface
  */
 
-int interface_start(struct library *lib, const char *geo, bool decor)
+int interface_start(struct library *lib, const char *geo, bool decor, bool display_bpm)
 {
     size_t n;
+    st_display_bpm = display_bpm;
 
     if (parse_geometry(geo) == -1) {
         fprintf(stderr, "Window geometry ('%s') is not valid.\n", geo);
