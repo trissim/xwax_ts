@@ -1,46 +1,188 @@
-#!/bin/bash
+#!/usr/bin/env python
+
+# encoding:utf8
+
+# An xwax scan script
+
+# for use:
+#   - xwax (as scanner)
+#   - independently as an .xwaxpls file generator
+# able to parse folders, files and playlists
 #
-# Take a pathname as an argument and output a playlist to standard
-# output and errors to standard error.
+# By: David Allan
+#     Kenneth Allan
 #
-# The output format is repeated sequences of:
-#
-#   <pathname>\t<artist>\t<title>[\t<bpm>]\n
-#
-# If the tab (\t) or newline (\n) characters appear in a filename,
-# unexpected things will happen.
 
-set -eu -o pipefail  # pipefail requires bash, not sh
+import sys
+import os
+import re
+from mutagen.easyid3 import EasyID3
+from mutagen.flac import FLAC
+from warnings import warn
 
-PATHNAME="$1"
+usage = """
+Usage:
+    An exwax scan script
 
-if [ -d "$PATHNAME" ]; then
-	find -L "$PATHNAME" -type f -regextype posix-egrep \
-		-iregex '.*\.(ogg|oga|aac|cdaudio|mp3|flac|wav|aif|aiff|m4a|wma)'
-else
-	cat "$PATHNAME"
-fi |
+    Uses:
+      - As a scanner script for folders, files, m3u's and .xwaxpls cache files
+      - As an .xwaxpls cache file generator.
 
-# Parse artist and title information from matching filenames
+    scanning an .xwaxpls file allows tag values to be directly read out of that file,
+    instead of scanning every songs tags in the list.
 
-sed -n '
-{
-# /[<ABnum>[.]] <artist> - <title>.ext
-s:/\([A-H]\?[A0-9]\?[0-9].\? \+\)\?\([^/]*\) \+- \+\([^/]*\)\.[A-Z0-9]*$:\0\t\2\t\3:pi
-t
+    This saves time when loading big collections of music at the start of exwax
 
-# /<artist> - <album>[/(Disc|Side) <name>]/[<ABnum>[.]] <title>.ext
-s:/\([^/]*\) \+- \+\([^/]*\)\(/\(disc\|side\) [0-9A-Z][^/]*\)\?/\([A-H]\?[A0-9]\?[0-9].\? \+\)\?\([^/]*\)\.[A-Z0-9]*$:\0\t\1\t\6:pi
-t
+    To create an .xwaxpls file use the script like so:
+        ./crate_scan /folder/or/file/path > cache.xwaxpls
 
-# /[<ABnum>[.]] <name>.ext
-s:/\([A-H]\?[A0-9]\?[0-9].\? \+\)\?\([^/]*\)\.[A-Z0-9]*$:\0\t\t\2:pi
-}' |
+"""
+debug = False
+args = sys.argv[1:]
 
-# Extract BPM metadata from title (eg. "Ghostbusters (115.6 BPM)")
+if len(args) == 0:
+    print(usage)
+    sys.exit()
 
-sed '
-{
-# BPM
-s:\(.*\) *(\([0-9]\+\.\?[0-9]\+\) *BPM)$:\1\t\2:
-}'
+
+def parseFilename(file):
+    info = ""
+    base = os.path.basename(file)
+    guessedAlbum = file.split('/')[-2]
+    guessedPerformer = file.split('/')[-3]
+    # print guessedAlbum
+    vor, ext = os.path.splitext(base)
+    infoChunks = vor.split(' - ')
+
+    if infoChunks[0].isdigit():
+        infoChunks.pop(0)
+    lpieces = len(infoChunks)
+
+    if lpieces == 1:
+        info = guessedPerformer + "\t" + infoChunks[0]
+    if lpieces == 2:
+        if all(i.isdigit() or i == " " for i in infoChunks[0]):
+            pieces[0] = guessedPerformer
+        info = infoChunks[0]+"\t" + infoChunks[1]
+    if lpieces >= 3:
+        if debug:
+            print(infoChunks, file=sys.stderr)
+            print("At least 3 parts of information found in filename. Not sure what to do. Truncing last one by default.", file=sys.stderr)
+        info = infoChunks[0]+"\t" + infoChunks[1]
+    return info + "  ("+guessedAlbum+")"
+
+
+def handle_m3u(m3u, files):
+    m3udir, m3ubase = os.path.split(m3u)
+    fh = open(m3u)
+    for line in fh.readlines():
+        if line.startswith('/'):
+            prefix = ''
+        else:
+            prefix = m3udir + "/"
+        if not line.startswith('#EXTINF'):
+            files.append(prefix + line)
+    fh.close()
+    return files
+
+
+# make list of files out of arguments
+files = list()
+for arg in args:
+    # if its a directory
+    print('Scanning ' + arg + '...', file=sys.stderr)
+    if os.path.isdir(arg):
+        listOfFiles = list()
+        for (dirpath, dirnames, filenames) in os.walk(arg):
+            listOfFiles += [os.path.join(dirpath, file) for file in filenames]
+        files.extend(listOfFiles)
+
+    # if its a .m3u playlist
+    elif arg.endswith('.m3u'):
+        files = handle_m3u(arg, files)
+        # print files
+        # if its a file
+    elif os.path.isfile(arg):
+        # print "["+arg+"]"
+        files.append(arg)
+    else:
+        die(abb+'Unknown file/dir '+arg)
+if debug:
+    print(('DEBUG: files = [%s]' % files))
+
+# take note of bpmless tracks and display at end
+bpmless = []
+
+# run through files, using easyID3
+#exts = 'agg oga aac cdaudio mp3 flac wav aif aiff wma'.split()
+
+
+def handle_audio_files(files):
+    exts = 'oga cdaudio mp3 flac wav aif aiff'.split()
+    for currentFile in files:
+        currentFile = currentFile.strip()
+        # if not currentfile.beginsWith('#'):
+        #print >> sys.stderr, "["+currentFile+"]"
+        if not os.path.exists((currentFile)):
+            #            warn(currentFile +
+            #                 " does not exist! Check playlist for typos/Case issues")
+            continue
+        if currentFile.endswith('.xwaxpls'):
+            fh2 = open(currentFile)
+            toread = fh2.read()
+            print(toread)
+            fh2.close()
+        if currentFile.endswith(".m3u"):
+            handle_audio_files(handle_m3u(currentFile, []))
+        else:
+            vor, ext = os.path.splitext(currentFile)
+            ext = ext.replace('.', '')
+            if ext in exts:
+                if debug:
+                    print('DEBUG: currentFile = [%s]' %
+                          currentFile, file=sys.stderr)
+                if ext == 'flac':
+                    try:
+                        audio = FLAC(currentFile)
+                    except Exception as e:
+                        print(('Exception! ' + str(e)))
+                        audio = FLAC()
+                else:
+                    try:
+                        audio = EasyID3(currentFile)
+                    except Exception as e:
+                        print('Exception! ' + str(e))
+                        audio = EasyID3()
+                info = ''
+                if audio.get('artist'):
+                    info += (audio.get('artist')[0])
+                info += '\t'
+                if audio.get('title'):
+                    info += (audio.get('title')[0])
+                info += '\t'
+                if audio.get('album'):
+                    info += (audio.get('album')[0])
+                info += '\t'
+                if audio.get('genre'):
+                    info += (audio.get('genre')[0])
+                info += '\t'
+                if audio.get('bpm'):
+                    print(audio.get('bpm')[0])
+                    info += (audio.get('bpm')[0])
+                # if len( bpm ) <= 1 :
+                #    print >> sys.stderr, "No BPM information found in tags."
+                #    bpmless.append(currentFile)
+                #    continue
+                if debug:
+                    print(currentFile)
+                print(os.path.abspath(currentFile) + '\t' + info)
+                # print >> sys.stderr, currentFile + '\t' + info #+ '\t' + bpm
+            else:
+                if debug:
+                    warn('Extension [%(ext)s] not supported' % locals())
+
+            # print 'DEBUG ext = [%s]'%ext
+print('Done.', file=sys.stderr)
+handle_audio_files(files)
+#print >> sys.stderr,'------------------\nBPM-less tracks:'
+#print >> sys.stderr,('\n'.join('{}:  {}'.format(*k) for k in enumerate(bpmless)))
