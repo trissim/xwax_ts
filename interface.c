@@ -665,7 +665,7 @@ static void draw_record(SDL_Surface *surface, const struct rect *rect,
             split(title, from_left(BPM_WIDTH, 0), &left, &right);
             draw_bpm(surface, &left, record->bpm, background_col);
     	}else{
-	    right = rect;
+	    right = *rect;
 	}
         split(right, from_left(HALF_SPACER, 0), &left, &title);
         draw_rect(surface, &left, background_col);
