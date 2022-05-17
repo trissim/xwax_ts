@@ -163,6 +163,8 @@ static SDL_Color background_col = {0, 0, 0, 255},
     detail_col = {128, 128, 128, 255},
     needle_col = {255, 255, 255, 255},
     artist_col = {16, 64, 0, 255},
+    album_col = {16, 16, 128, 255},
+    genre_col = {64, 16, 0, 255},
     bpm_col = {64, 16, 0, 255};
 
 static unsigned short *spinner_angle, spinner_size;
@@ -175,7 +177,9 @@ static iconv_t utf;
 static pthread_t ph;
 static struct selector selector;
 static struct observer on_status, on_selector;
+
 static bool st_display_bpm = true;
+static bool st_display_new_cols = true;
 
 /*
  * Scale a dimension according to the current zoom level
@@ -652,11 +656,16 @@ static void draw_bpm_field(SDL_Surface *surface, const struct rect *rect,
 static void draw_record(SDL_Surface *surface, const struct rect *rect,
                         const struct record *record)
 {
-    struct rect artist, title, left, right;
+
+    struct rect artist, album, title, left, right;
 
     split(*rect, from_top(BIG_FONT_SPACE, 0), &artist, &title);
+
+    split(title, from_top(FONT_SPACE, 0), &album, &title);
     draw_text_in_locale(surface, &artist, record->artist,
                         big_font, text_col, background_col);
+    draw_text_in_locale(surface, &album, record->album,
+              font, text_col, background_col);
 
     /* Layout changes slightly if BPM is known */
 
@@ -1286,8 +1295,16 @@ static void draw_crate_row(const void *context,
         draw_token(surface, &right, "ART", text_col, artist_col, selected_col);
         break;
 
+    case SORT_ALBUM:
+        draw_token(surface, &right, "ALB", text_col, album_col, selected_col);
+        break;
+
     case SORT_BPM:
         draw_token(surface, &right, "BPM", text_col, bpm_col, selected_col);
+        break;
+
+    case SORT_GENRE:
+        draw_token(surface, &right, "GEN", text_col, genre_col, selected_col);
         break;
 
     case SORT_PLAYLIST:
@@ -1303,7 +1320,6 @@ static void draw_crate_row(const void *context,
         draw_token(surface, &right, "BUSY", text_col,
                    dim(alert_col, 2), selected_col);
     }
-
     draw_text_in_locale(surface, &left, crate->name, font, col, selected_col);
 }
 
@@ -1350,8 +1366,17 @@ static void draw_record_row(const void *context,
     split(right, from_left(SPACER, 0), &left, &right);
     draw_rect(surface, &left, col);
     draw_text_in_locale(surface, &right, record->title, font, text_col, col);
-}
 
+    if (st_display_new_cols == true){
+    	split(right, from_left(width * 2, 0), &left, &right);
+    	draw_rect(surface, &right, col);
+    	draw_text_in_locale(surface, &right, record->album, font, text_col, col);
+
+    	split(right, from_left(width*1.5, 0), &left, &right);
+        draw_rect(surface, &right, col);
+        draw_text_in_locale(surface, &right, record->genre, font, text_col, col);
+    }
+}
 /*
  * Display a record library index, with scrollbar and current
  * selection
@@ -1857,10 +1882,11 @@ static void cleanup()
  * Start the SDL interface
  */
 
-int interface_start(struct library *lib, const char *geo, bool decor, bool display_bpm)
+int interface_start(struct library *lib, const char *geo, bool decor, bool display_bpm,bool display_new_cols)
 {
     size_t n;
     st_display_bpm = display_bpm;
+    st_display_new_cols = st_display_new_cols;
 
     if (parse_geometry(geo) == -1) {
         fprintf(stderr, "Window geometry ('%s') is not valid.\n", geo);

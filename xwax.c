@@ -86,7 +86,8 @@ static void usage(FILE *fd)
       DEFAULT_PRIORITY);
 
     fprintf(fd, "Interface Options:\n"
-      "  --no-art	Hide BPM information\n"
+      "  --no-bpm	Hide BPM information\n"
+      "  --no-new-cols	Hide columns for extra track information\n"
       );
 
     fprintf(fd, "Music library options:\n"
@@ -192,7 +193,7 @@ int main(int argc, char *argv[])
     int rc = -1, n, priority;
     const char *scanner, *geo;
     char *endptr;
-    bool use_mlock, decor, display_bpm;
+    bool use_mlock, decor, display_bpm,display_new_cols; 
 
     struct library library;
 
@@ -237,6 +238,7 @@ int main(int argc, char *argv[])
     geo = "";
     decor = true;
     display_bpm = true;
+    display_new_cols = true;
     nctl = 0;
     priority = DEFAULT_PRIORITY;
     importer = DEFAULT_IMPORTER;
@@ -539,6 +541,13 @@ int main(int argc, char *argv[])
             argv++;
             argc--;
 
+        } else if (!strcmp(argv[0], "--no-new-cols")) {
+
+            display_new_cols = false;
+
+            argv++;
+            argc--;
+
         } else if (!strcmp(argv[0], "--no-decor")) {
 
             decor = false;
@@ -646,7 +655,7 @@ int main(int argc, char *argv[])
         goto out_rt;
     }
 
-    if (interface_start(&library, geo, decor, display_bpm) == -1)
+    if (interface_start(&library, geo, decor, display_bpm,display_new_cols) == -1)
         goto out_rt;
 
     if (rig_main() == -1)
