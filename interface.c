@@ -67,7 +67,7 @@
 
 #define DETAIL_FONT "DejaVuSansMono-Bold.ttf"
 #define DETAIL_FONT_SIZE 9
-#define DETAIL_FONT_SPACE 12
+#define DETAIL_FONT_SPACE 10
 
 /* Screen size (pixels) */
 
@@ -100,8 +100,8 @@
 #define STATUS_HEIGHT (DETAIL_FONT_SPACE)
 
 #define BPM_WIDTH 32
-#define SORT_WIDTH 25
-#define RESULTS_ARTIST_WIDTH 115
+#define SORT_WIDTH 21
+#define RESULTS_ARTIST_WIDTH 130
 
 #define TOKEN_SPACE 2
 
@@ -164,8 +164,8 @@ static SDL_Color background_col = {0, 0, 0, 255},
     needle_col = {255, 255, 255, 255},
     artist_col = {16, 64, 0, 255},
     album_col = {16, 16, 128, 255},
-    genre_col = {64, 16, 0, 255},
-    bpm_col = {64, 16, 0, 255};
+    genre_col = {64, 32, 16, 255},
+    bpm_col = {96, 16, 0, 255};
 
 static unsigned short *spinner_angle, spinner_size;
 
@@ -659,13 +659,17 @@ static void draw_record(SDL_Surface *surface, const struct rect *rect,
 
     struct rect artist, album, title, left, right;
 
+    //split(*rect, from_top(BIG_FONT_SPACE, 0), &artist, &title);
+    //split(*rect, from_top(BIG_FONT_SPACE, 0), &artist, &title);
     split(*rect, from_top(BIG_FONT_SPACE, 0), &artist, &title);
 
+    //split(title, from_top(FONT_SPACE, 0), &album, &title);
     split(title, from_top(FONT_SPACE, 0), &album, &title);
     draw_text_in_locale(surface, &artist, record->artist,
-                        big_font, text_col, background_col);
+              big_font, text_col, background_col);
     draw_text_in_locale(surface, &album, record->album,
               font, text_col, background_col);
+    //printf("%s",record->title);
 
     /* Layout changes slightly if BPM is known */
 
@@ -1281,6 +1285,17 @@ static void draw_crate_row(const void *context,
         col = detail_col;
     else
         col = text_col;
+    char* crateName = crate->name;
+    int len = strlen(crateName);
+    if (endsWith(crateName, ".xwaxpls"))
+    {
+        crateName[len-8] = 0;
+    }
+    if (endsWith(crateName, ".m3u"))
+    {
+        crateName[len-4] = 0;
+    }
+
 
     if (!selected) {
         draw_text_in_locale(surface, &rect, crate->name,
@@ -1988,4 +2003,14 @@ void interface_stop(void)
         abort();
 
     cleanup();
+}
+int endsWith(const char *str, const char *suffix)
+{
+    if (!str || !suffix)
+        return 0;
+    size_t lenstr = strlen(str);
+    size_t lensuffix = strlen(suffix);
+    if (lensuffix >  lenstr)
+        return 0;
+    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
